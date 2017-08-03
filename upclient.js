@@ -2,6 +2,7 @@
 "use strict";
 var sjcl = require('./sjcl.js');
 var https = require('https');
+var http = require('http');
 var crypto = require('crypto');
 var FormData = require('form-data');
 var mmm = require('mmmagic');
@@ -13,6 +14,9 @@ var S = require('string');
 S.extendPrototype();
 const { URL } = require('url');
 
+const up1_server_default = "https://up.k0nsl.org";
+const up1_apikey_default = "yspjx5cwtvbqretqr5w888y7dhuzsmjam5v";
+
 var argv = cli
 	.name('up')
 	.version('0.1')
@@ -22,10 +26,11 @@ var argv = cli
 	.option('-t, --text', 'force text/plain', false)
 	.option('-f, --file <name>', 'force file name for stdin based inputs', false)
 	.option('-m, --mime <mime>', 'force given mime type', 'detect')
+	.option('-s, --server <https://example.com:443>', 'specify Up1 server', (process.env.UP1_SERVER || up1_server_default) )
+	.option('-k, --apikey <key>', 'specify server api key', (process.env.UP1_APIKEY || up1_apikey_default) )
 	.parse();
 
-const uphost = new URL(process.env.UP1_HOST || "https://up.k0nsl.org");
-const apikey = process.env.UP1_APIKEY || "yspjx5cwtvbqretqr5w888y7dhuzsmjam5v";
+const uphost = new URL(argv.server);
 
 function parametersfrombits(seed) {
     var out = sjcl.hash.sha512.hash(seed)
@@ -128,17 +133,31 @@ function doUpload(data, name, type) {
 
 
 	var formdata = new FormData()
-	formdata.append('api_key', apikey)
+	formdata.append('api_key', argv.apikey)
 	formdata.append('ident', result.ident)
 	formdata.append('file', result.encrypted, {filename: 'file', contentType: 'text/plain'})
 
-	var req = https.request({
-	    host: uphost.hostname,
-	    port: uphost.port,
-	    path: '/up',
-	    method: 'POST',
-	    headers: formdata.getHeaders()
-	});
+    if ( uphost.protocol === "https:" ) {
+        var req = https.request({
+            host: uphost.hostname,
+            port: uphost.port,
+            path: '/up',
+            method: 'POST',
+            headers: formdata.getHeaders()
+        }).on('error', (e) => {
+            console.error(e)
+        });
+    } else if ( uphost.protocol === "http:" ) {
+        var req = http.request({
+            host: uphost.hostname,
+            port: uphost.port,
+            path: '/up',
+            method: 'POST',
+            headers: formdata.getHeaders()
+        }).on('error', (e) => {
+            console.error(e)
+        });
+    }
 
 
 	formdata.pipe(req);
